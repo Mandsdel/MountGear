@@ -199,24 +199,39 @@ function addon.retry()
     schedule()
 end
 
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then
-        MountGearDB = MountGearDB or {}
-        db = MountGearDB
-        db.picks = db.picks or {}
-        addon.db = db
-        addon.available = not not (itemInfo and bagSize and bagLink and bagFree and pickupBag
-            and PickupInventoryItem and IsMounted and C_Timer and C_Timer.After)
-        if addon.available then
-            frame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
-            frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-            frame:RegisterEvent("CURSOR_UPDATE")
-            addon.retry()
-        else
-            status("Required gear or mount API unavailable in this client.", true)
+local function initialize()
+    if addon.initialized then return end
+    addon.initialized = true
+    addon.available = not not (itemInfo and bagSize and bagLink and bagFree and pickupBag
+        and PickupInventoryItem and IsMounted and C_Timer and C_Timer.After)
+    addon.createOptions()
+    if addon.available then
+        for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED", "CURSOR_UPDATE" }) do
+            local ok, err = pcall(frame.RegisterEvent, frame, name)
+            if not ok then
+                addon.available = false
+                status("Unable to register " .. name .. "; gear swapping is disabled: " .. tostring(err), true)
+                return
+            end
         end
-        addon.createOptions()
+        addon.retry()
+    else
+        status("Required gear or mount API unavailable in this client.", true)
+    end
+end
+
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:SetScript("OnEvent", function(_, event, name)
+    if event == "ADDON_LOADED" and name == "MountGear" then
+        if type(MountGearDB) ~= "table" then MountGearDB = {} end
+        db = MountGearDB
+        if type(db.picks) ~= "table" then db.picks = {} end
+        addon.db = db
+        addon.registerSlashCommand()
+        if IsLoggedIn and IsLoggedIn() then initialize() end
+    elseif event == "PLAYER_LOGIN" then
+        if db then initialize() end
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
         addon.retry()
     elseif (event == "PLAYER_REGEN_ENABLED" and waitingFor == "combat")

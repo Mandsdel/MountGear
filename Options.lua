@@ -174,12 +174,17 @@ local function toggleWindow()
     end
 end
 
-function addon.createOptions()
+function addon.registerSlashCommand()
     SLASH_MOUNTGEAR1 = "/mountgear"
     SlashCmdList.MOUNTGEAR = toggleWindow
+end
 
+function addon.createOptions()
     local minimap = Minimap or (MinimapCluster and MinimapCluster.Minimap)
-    if not minimap then return end
+    if not minimap then
+        print("|cff80cfffMountGear:|r Minimap unavailable; use /mountgear.")
+        return
+    end
     local button = CreateFrame("Button", "MountGearMinimapButton", minimap)
     button:SetSize(32, 32)
     button:SetFrameStrata("MEDIUM")
@@ -196,7 +201,7 @@ function addon.createOptions()
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
     local function position()
-        local angle = addon.db.angle or math.rad(225)
+        local angle = addon.db.angle or math.rad(135)
         button:ClearAllPoints()
         button:SetPoint("CENTER", minimap, "CENTER",
             math.cos(angle) * (minimap:GetWidth() / 2 + 5),
@@ -231,4 +236,5 @@ function addon.createOptions()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
     position()
+    button:Show()
 end
