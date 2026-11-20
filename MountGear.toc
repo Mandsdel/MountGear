@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: MountGear
+## Notes: Equips your riding gear on mount and restores it on dismount.
+## Version: 0.1.0
+## SavedVariablesPerCharacter: MountGearDB
+
+Core.lua
+Options.lua
