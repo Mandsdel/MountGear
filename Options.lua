@@ -1,8 +1,13 @@
 local _, addon = ...
-local window, statusText, pickerTitle, previous, following, pageText
-local rows, itemButtons = {}, {}
-local choosing, choices, page = nil, {}, 1
-local pageSize = 5
+local window, statusText, picker, pickerTitle, pickerHint, scroll, content, emptyText
+local itemButtons, choicesButtons = {}, {}
+local choosing, choices = nil, {}
+local cellSize, maxColumns, maxRows = 42, 8, 6
+local emptyIcons = {
+    [8] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Feet",
+    [13] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket",
+    [14] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket",
+}
 
 local function makeButton(parent, width, height, text)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -11,40 +16,37 @@ local function makeButton(parent, width, height, text)
     return button
 end
 
-local function nameOf(link)
-    return link:match("|h%[(.-)%]|h") or link
+local function itemTooltip(button)
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    if button.link then
+        GameTooltip:SetHyperlink(button.link)
+    else
+        GameTooltip:SetText("Click to choose " .. addon.labels[button.slot])
+    end
+    GameTooltip:Show()
 end
 
-local function itemTooltip(button)
-    if not button.link then return end
-    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-    GameTooltip:SetHyperlink(button.link)
-    GameTooltip:Show()
+local function background(frame)
+    local texture = frame:CreateTexture(nil, "BACKGROUND")
+    texture:SetAllPoints()
+    texture:SetColorTexture(0.055, 0.06, 0.075, 0.97)
+end
+
+local function iconButton(parent)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(36, 36)
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    button.icon = icon
+    button:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
+    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    button:SetScript("OnEnter", itemTooltip)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return button
 end
 
 function addon.updateStatus()
     if statusText then statusText:SetText(addon.status or "Picks are saved per character.") end
-end
-
-local function drawPicker()
-    local pages = math.max(1, math.ceil(#choices / pageSize))
-    page = math.max(1, math.min(page, pages))
-    pickerTitle:SetText(choosing and ("Choose " .. addon.labels[choosing] ..
-        (#choices == 0 and " - none found" or "")) or "Click a slot to choose an item.")
-    for i, row in ipairs(rows) do
-        local choice = choices[(page - 1) * pageSize + i]
-        row.link = choice and choice.link
-        if choice then
-            row:SetText(choice.name .. (choice.count > 1 and (" x" .. choice.count) or ""))
-            row.icon:SetTexture(choice.icon)
-            row:Show()
-        else
-            row:Hide()
-        end
-    end
-    previous:SetEnabled(page > 1)
-    following:SetEnabled(page < pages)
-    pageText:SetText(#choices > 0 and ("%d / %d"):format(page, pages) or "")
 end
 
 local function drawPicks()
@@ -52,19 +54,75 @@ local function drawPicks()
         local button = itemButtons[slot]
         local link = addon.db.picks[slot]
         button.link = link
-        button:SetText(link and nameOf(link) or "Not selected")
+        local info = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+        local icon
+        if link and info then
+            local _, _, _, _, texture = info(link)
+            icon = texture
+        end
+        button.icon:SetTexture(icon or (link and "Interface\\Icons\\INV_Misc_QuestionMark") or emptyIcons[slot])
+    end
+end
+
+local function drawPicker()
+    local columns = math.min(maxColumns, math.max(4, #choices))
+    local rows = math.max(1, math.ceil(#choices / columns))
+    local visibleRows = math.min(maxRows, rows)
+    picker:SetSize(columns * cellSize + 24, visibleRows * cellSize + 78)
+    scroll:SetSize(columns * cellSize, visibleRows * cellSize)
+    content:SetSize(columns * cellSize, rows * cellSize)
+    scroll:SetVerticalScroll(0)
+    pickerTitle:SetText("Choose " .. addon.labels[choosing])
+    pickerHint:SetText(rows > maxRows and "Hover for details. Scroll for more." or "Hover for details. Click to select.")
+    if #choices == 0 then emptyText:Show() else emptyText:Hide() end
+
+    for i, choice in ipairs(choices) do
+        local button = choicesButtons[i]
+        if not button then
+            button = iconButton(content)
+            button.count = button:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+            button.count:SetPoint("BOTTOMRIGHT", -1, 1)
+            button:SetScript("OnClick", function(self)
+                local item = self.choice
+                local other = choosing == 13 and 14 or 13
+                if choosing ~= 8 and item.count == 1
+                    and addon.itemKey(addon.db.picks[other]) == addon.itemKey(item.link) then
+                    statusText:SetText("You only have one copy of that trinket.")
+                    return
+                end
+                addon.db.picks[choosing] = item.link
+                GameTooltip:Hide()
+                drawPicks()
+                picker:Hide()
+                statusText:SetText("Saved for your next mount.")
+            end)
+            choicesButtons[i] = button
+        end
+        button.choice, button.link = choice, choice.link
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", ((i - 1) % columns) * cellSize + 3,
+            -math.floor((i - 1) / columns) * cellSize - 3)
+        button.icon:SetTexture(choice.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+        button.count:SetText(choice.count > 1 and choice.count or "")
+        button:Show()
+    end
+    for i = #choices + 1, #choicesButtons do
+        choicesButtons[i].link, choicesButtons[i].choice = nil, nil
+        choicesButtons[i]:Hide()
     end
 end
 
 local function choose(slot)
-    choosing, page = slot, 1
-    choices = slot and addon.itemsFor(slot) or {}
+    choosing = slot
+    choices = addon.itemsFor(slot)
+    GameTooltip:Hide()
     drawPicker()
+    picker:Show()
 end
 
 local function createWindow()
     window = CreateFrame("Frame", "MountGearOptions", UIParent)
-    window:SetSize(304, 332)
+    window:SetSize(256, 258)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:EnableMouse(true)
@@ -72,9 +130,7 @@ local function createWindow()
     window:Hide()
     tinsert(UISpecialFrames, window:GetName())
 
-    local background = window:CreateTexture(nil, "BACKGROUND")
-    background:SetAllPoints()
-    background:SetColorTexture(0.055, 0.06, 0.075, 0.97)
+    background(window)
 
     local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 12, -12)
@@ -85,21 +141,20 @@ local function createWindow()
     close:SetScript("OnClick", function() window:Hide() end)
 
     for i, slot in ipairs(addon.slots) do
-        local y = -38 - (i - 1) * 26
+        local y = -40 - (i - 1) * 44
         local label = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        label:SetPoint("TOPLEFT", 12, y - 5)
+        label:SetPoint("TOPLEFT", 12, y - 12)
         label:SetText(addon.labels[slot])
 
-        local button = makeButton(window, 155, 22, "")
-        button:SetPoint("TOPLEFT", 78, y)
+        local button = iconButton(window)
+        button.slot = slot
+        button:SetPoint("TOPLEFT", 90, y)
         button:SetEnabled(addon.available)
         button:SetScript("OnClick", function() choose(slot) end)
-        button:SetScript("OnEnter", itemTooltip)
-        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
         itemButtons[slot] = button
 
         local clear = makeButton(window, 54, 22, "Clear")
-        clear:SetPoint("LEFT", button, "RIGHT", 4, 0)
+        clear:SetPoint("LEFT", button, "RIGHT", 18, 0)
         clear:SetScript("OnClick", function()
             addon.db.picks[slot] = nil
             drawPicks()
@@ -107,55 +162,56 @@ local function createWindow()
         end)
     end
 
-    pickerTitle = window:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pickerTitle:SetPoint("TOPLEFT", 12, -122)
-    for i = 1, pageSize do
-        local row = makeButton(window, 251, 20, "")
-        row:SetPoint("TOPLEFT", 40, -140 - (i - 1) * 22)
-        local icon = row:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(18, 18)
-        icon:SetPoint("RIGHT", row, "LEFT", -5, 0)
-        row.icon = icon
-        row:SetScript("OnEnter", itemTooltip)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-        row:SetScript("OnClick", function()
-            local choice = choices[(page - 1) * pageSize + i]
-            local other = choosing == 13 and 14 or 13
-            if choosing ~= 8 and choice.count == 1
-                and addon.itemKey(addon.db.picks[other]) == addon.itemKey(choice.link) then
-                statusText:SetText("You only have one copy of that trinket.")
-                return
-            end
-            addon.db.picks[choosing] = choice.link
-            GameTooltip:Hide()
-            drawPicks()
-            choose(nil)
-            statusText:SetText("Saved for your next mount.")
-        end)
-        rows[i] = row
-    end
-
-    previous = makeButton(window, 28, 20, "<")
-    previous:SetPoint("TOPLEFT", 12, -254)
-    previous:SetScript("OnClick", function() page = page - 1; drawPicker() end)
-    following = makeButton(window, 28, 20, ">")
-    following:SetPoint("TOPLEFT", 88, -254)
-    following:SetScript("OnClick", function() page = page + 1; drawPicker() end)
-    pageText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    pageText:SetPoint("CENTER", previous, "CENTER", 38, 0)
+    local hint = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    hint:SetPoint("TOPLEFT", 12, -176)
+    hint:SetText("Click a slot icon to choose gear.")
     local retry = makeButton(window, 56, 20, "Retry")
-    retry:SetPoint("TOPRIGHT", -12, -254)
+    retry:SetPoint("TOPLEFT", 12, -198)
     retry:SetEnabled(addon.available)
     retry:SetScript("OnClick", addon.retry)
     statusText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", 12, -284)
-    statusText:SetWidth(280)
+    statusText:SetPoint("TOPLEFT", 12, -224)
+    statusText:SetWidth(232)
     statusText:SetJustifyH("LEFT")
+
+    picker = CreateFrame("Frame", "MountGearItemPicker", window)
+    picker:SetPoint("TOPLEFT", window, "TOPRIGHT", 8, 0)
+    picker:SetFrameStrata("DIALOG")
+    picker:SetFrameLevel(window:GetFrameLevel() + 10)
+    picker:EnableMouse(true)
+    picker:SetClampedToScreen(true)
+    picker:Hide()
+    background(picker)
+    tinsert(UISpecialFrames, picker:GetName())
+    local pickerClose = CreateFrame("Button", nil, picker, "UIPanelCloseButton")
+    pickerClose:SetPoint("TOPRIGHT")
+    pickerClose:SetScript("OnClick", function() picker:Hide() end)
+    picker:SetScript("OnHide", function()
+        choosing = nil
+        GameTooltip:Hide()
+    end)
+    window:SetScript("OnHide", function() picker:Hide(); GameTooltip:Hide() end)
+    pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    pickerTitle:SetPoint("TOPLEFT", 12, -12)
+    pickerHint = picker:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    pickerHint:SetPoint("BOTTOMLEFT", 12, 12)
+    scroll = CreateFrame("ScrollFrame", nil, picker)
+    scroll:SetPoint("TOPLEFT", 12, -38)
+    content = CreateFrame("Frame", nil, scroll)
+    scroll:SetScrollChild(content)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local limit = math.max(0, content:GetHeight() - self:GetHeight())
+        self:SetVerticalScroll(math.max(0, math.min(limit, self:GetVerticalScroll() - delta * cellSize)))
+    end)
+    emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    emptyText:SetPoint("TOPLEFT", 3, -12)
+    emptyText:SetText("No matching items found.")
 
     window:RegisterEvent("BAG_UPDATE_DELAYED")
     window:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     window:SetScript("OnEvent", function(self)
-        if self:IsShown() and choosing then
+        if self:IsShown() and picker:IsShown() and choosing then
             choices = addon.itemsFor(choosing)
             drawPicker()
         end
@@ -168,7 +224,6 @@ local function toggleWindow()
         window:Hide()
     else
         drawPicks()
-        choose(nil)
         addon.updateStatus()
         window:Show()
     end

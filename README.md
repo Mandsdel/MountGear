@@ -5,7 +5,12 @@ horse icon on the minimap or type `/mountgear`. Drag the icon around the
 minimap to move it.
 
 Pick boots, up to two trinkets, or both. The picker shows items in your bags
-or already equipped. Picks and the icon position are saved per character.
+or already equipped. Click a slot icon in the main window to open a separate,
+automatically sized bag-style grid. Hover over an item icon to see its in-game
+tooltip, then click it to save your choice. Large collections can be scrolled
+with the mouse wheel. The main window also uses icons, so long item names do
+not overlap controls. **Clear** leaves that slot out of the mount preset.
+Picks and the icon position are saved per character.
 MountGear equips the selected items when you mount and restores the gear you
 were wearing when you dismount. Changes to your picks take effect on the next
 ride.
