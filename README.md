@@ -26,6 +26,16 @@ fails (for example, an item is missing, two trinkets cannot be worn together,
 or a bag slot is needed to restore an empty slot), the addon reports which
 slots are affected. Fix the issue and click **Retry** in the window.
 
+Temporary equipment and bag-item locks are checked every half-second, for up
+to 20 checks per operation, without using the failed-swap retry budget.
+Restoration resumes automatically if they unlock during this window. If they
+stay locked, MountGear reports that specifically; wait and click **Retry**.
+
+Saved settings are validated before use. Invalid mount picks are cleared with
+a warning. An invalid restore snapshot is kept intact and automatic swaps are
+stopped with a recovery message, rather than risking the wrong equipment.
+Use **Reset** only when ready to abandon that snapshot.
+
 If a pending restore is stuck or its saved items are no longer available,
 dismount and click **Reset**, then confirm. This forgets the pending restore
 without moving any equipment or clearing your mount picks. Equip your normal

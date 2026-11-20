@@ -22,6 +22,7 @@ end
 local function setup()
     worn, bags = copy(originals), { picks[8], picks[13], picks[14] }
     mounted, taxi, combat, cursor, blocked, swaps = false, false, false, nil, false, 0
+    IsInventoryItemLocked = nil
     C_Container, C_Item = nil, nil
     NUM_BAG_SLOTS = 0
     CreateFrame = function()
@@ -221,5 +222,129 @@ loadAddon({ picks = copy(picks) })
 assert(not addon.available and #timers == 0)
 assert(addon.status == "Required gear, mount, or flight-path API unavailable in this client.")
 
+-- A temporary lock gets its own wait budget and resumes without another event.
+for _, location in ipairs({ "equipped", "bag-table", "bag-legacy", "other-trinket" }) do
+    setup()
+    mount()
+    local locked = true
+    if location == "equipped" then
+        IsInventoryItemLocked = function() return locked end
+    elseif location == "other-trinket" then
+        worn[13], worn[14] = originals[14], originals[13]
+        bags[2], bags[3] = picks[13], picks[14]
+        IsInventoryItemLocked = function(slot) return locked and slot == 14 end
+    else
+        GetContainerItemInfo = function()
+            if location == "bag-table" then return { isLocked = locked } end
+            return nil, nil, locked
+        end
+        -- Core captures the bag API when loaded.
+        loadAddon(addon.db)
+    end
+    mounted = false
+    frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+    for _ = 1, 5 do tick() end
+    assert(addon.status == "Waiting for equipment or bag items to unlock.")
+    assert(#warnings == 0 and addon.db.ride)
+    locked = false
+    drain()
+    assertRestored()
+end
+
+-- Permanent locks stop after exactly 20 half-second waits, and Retry can recover.
+setup()
+mount()
+IsInventoryItemLocked = function() return true end
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+tick()
+for _ = 1, 20 do
+    assert(#timers == 1 and timers[1].delay == 0.5)
+    tick()
+end
+assert(#timers == 0 and #warnings == 1 and addon.db.ride)
+assert(addon.status:find("Items are still locked", 1, true))
+IsInventoryItemLocked = nil
+addon.retry()
+drain()
+assertRestored()
+
+-- An originally empty slot can wait for an available bag position to unlock.
+setup()
+worn[8] = nil
+mount()
+IsInventoryItemLocked = function(slot) return slot == 13 or slot == 14 end
+local locked = true
+GetContainerItemInfo = function() return { isLocked = locked } end
+loadAddon(addon.db)
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+for _ = 1, 4 do tick() end
+assert(addon.status == "Waiting for equipment or bag items to unlock.")
+locked = false
+IsInventoryItemLocked = nil
+drain()
+assert(worn[8] == nil and worn[13] == originals[13] and worn[14] == originals[14])
+assert(addon.db.ride == nil)
+
+-- Bad snapshots remain intact, block swaps, and can be abandoned using Reset.
+for _, ride in ipairs({
+    true, false, 42, "old-data", {},
+    { mounted = true, original = {} },
+    { mounted = {}, original = false },
+    { mounted = { [8] = 123 }, original = { [8] = originals[8] } },
+    { mounted = { [8] = picks[8] }, original = {} },
+    { mounted = { [13] = picks[13] }, original = { [13] = originals[13] } },
+    { mounted = {}, original = { [8] = true } },
+    { mounted = {}, original = { [8] = "" } },
+    { mounted = {}, original = { [8] = "not-an-item" } },
+    { mounted = {}, original = { [99] = originals[8] } },
+}) do
+    setup()
+    loadAddon({ picks = copy(picks), ride = ride })
+    drain()
+    assert(addon.db.ride == ride and swaps == 0)
+    assert(addon.status:find("Saved restore data is invalid", 1, true))
+    assert(#warnings == 1)
+    addon.retry()
+    drain()
+    assert(#warnings == 1 and swaps == 0)
+    addon.resetRide()
+    assert(addon.db.ride == nil)
+    mount()
+    mounted = false
+    frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+    drain()
+    assertRestored()
+end
+
+-- Invalid picks are reported and cleared without discarding a good restore.
+setup()
+mount()
+local savedRide = addon.db.ride
+mounted = false
+loadAddon({ picks = { [8] = true, [13] = {}, [14] = "bad", [99] = "item:7" },
+    ride = savedRide })
+assert(next(addon.db.picks) == nil and #warnings == 4)
+drain()
+assertRestored()
+
+for _, invalid in ipairs({ true, 123, "bad" }) do
+    setup()
+    loadAddon(invalid)
+    drain()
+    assert(type(addon.db) == "table" and next(addon.db.picks) == nil and #warnings == 1)
+    setup()
+    loadAddon({ picks = invalid })
+    drain()
+    assert(next(addon.db.picks) == nil and #warnings == 1)
+end
+
+setup()
+local link = "|cff00ff00|Hitem:4:0:0:0|h[Boots]|h|r"
+loadAddon({ picks = { [8] = link } })
+drain()
+assert(addon.db.picks[8] == link and #warnings == 0)
+
 print = output
-print("MountGear flight-path and recovery checks passed")
+print("MountGear flight-path, lock-wait, and saved-state recovery checks passed")

@@ -18,6 +18,32 @@ local function key(link)
 end
 addon.itemKey = key
 
+local function validItem(value)
+    if type(value) ~= "string" then return false end
+    local id = key(value)
+    return id:match("^item:%d+$") or id:match("^item:%d+:")
+end
+
+local function validTargets(targets, allowEmpty)
+    if type(targets) ~= "table" then return false end
+    for slot, value in pairs(targets) do
+        if not addon.labels[slot] then return false end
+        if not (allowEmpty and value == false)
+            and not (validItem(value) and key(value) == value) then return false end
+    end
+    return true
+end
+
+local function validRide(ride)
+    if ride == nil then return true end
+    if type(ride) ~= "table" or not validTargets(ride.mounted, false)
+        or not validTargets(ride.original, true) then return false end
+    if ride.mounted[8] and ride.original[8] == nil then return false end
+    if (ride.mounted[13] or ride.mounted[14])
+        and (ride.original[13] == nil or ride.original[14] == nil) then return false end
+    return true
+end
+
 local function wornLink(slot)
     return GetInventoryItemLink("player", slot)
 end
@@ -74,20 +100,24 @@ local function wornLocked(slot)
 end
 
 local function swap(slot, wanted, targets)
-    if wornLocked(slot) then return false end
+    if wornLocked(slot) then return false, true end
+    local locked = false
     if wanted == false then
-        return scanBags(function(bag, index, link)
+        local swapped = scanBags(function(bag, index, link)
             local _, family = bagFree(bag)
-            if link or family ~= 0 or bagLocked(bag, index) then return end
+            if link or family ~= 0 then return end
+            if bagLocked(bag, index) then locked = true; return end
             PickupInventoryItem(slot)
             if CursorHasItem() then pickupBag(bag, index) end
             ClearCursor()
             return true
         end)
+        return swapped, locked
     end
 
     if scanBags(function(bag, index, link)
-        if key(link) ~= wanted or bagLocked(bag, index) then return end
+        if key(link) ~= wanted then return end
+        if bagLocked(bag, index) then locked = true; return end
         pickupBag(bag, index)
         if CursorHasItem() then PickupInventoryItem(slot) end
         if CursorHasItem() and not bagLink(bag, index) then pickupBag(bag, index) end
@@ -97,7 +127,8 @@ local function swap(slot, wanted, targets)
 
     if slot ~= 8 then
         local other = slot == 13 and 14 or 13
-        if targets[other] ~= wanted and key(wornLink(other)) == wanted and not wornLocked(other) then
+        if targets[other] ~= wanted and key(wornLink(other)) == wanted then
+            if wornLocked(other) then return false, true end
             PickupInventoryItem(other)
             if CursorHasItem() then PickupInventoryItem(slot) end
             if CursorHasItem() and not wornLink(other) then PickupInventoryItem(other) end
@@ -105,7 +136,7 @@ local function swap(slot, wanted, targets)
             return true
         end
     end
-    return false
+    return false, locked
 end
 
 local advance
@@ -128,6 +159,11 @@ end
 
 advance = function()
     waitingFor = nil
+    if not validRide(db.ride) then
+        local text = "Saved restore data is invalid. No gear was moved. Dismount and use Reset to recover."
+        status(text, addon.status ~= text)
+        return
+    end
     -- Taxi travel can report a mount change while equipment swaps are blocked.
     if UnitOnTaxi("player") then
         waitingFor = "taxi"
@@ -180,10 +216,13 @@ advance = function()
     end
 
     -- Restore filled slots first so their swaps can make room for an empty slot.
+    local locked = false
     for _, empty in ipairs({ false, true }) do
         for _, slot in ipairs(missing) do
             if (targets[slot] == false) == empty and (attempts[slot] or 0) < 3 then
-                if swap(slot, targets[slot], targets) then
+                local swapped, itemLocked = swap(slot, targets[slot], targets)
+                locked = locked or itemLocked
+                if swapped then
                     attempts[slot] = (attempts[slot] or 0) + 1
                     schedule()
                     return
@@ -191,7 +230,14 @@ advance = function()
             end
         end
     end
-    if (attempts.waits or 0) < 2 then
+    if locked and (attempts.locks or 0) < 20 then
+        attempts.locks = (attempts.locks or 0) + 1
+        waitingFor = "locks"
+        status("Waiting for equipment or bag items to unlock.")
+        schedule(0.5)
+        return
+    end
+    if not locked and (attempts.waits or 0) < 2 then
         attempts.waits = (attempts.waits or 0) + 1
         schedule()
         return
@@ -199,7 +245,8 @@ advance = function()
     local names = {}
     for _, slot in ipairs(missing) do names[#names + 1] = addon.labels[slot] end
     status((mounted and "Couldn't equip " or "Couldn't restore ") .. table.concat(names, ", ")
-        .. ". Check your bags and use Retry.", true)
+        .. (locked and ". Items are still locked; wait for them to unlock and use Retry."
+            or ". Check your bags and use Retry."), true)
 end
 
 function addon.retry()
@@ -244,9 +291,21 @@ frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(_, event, name)
     if event == "ADDON_LOADED" and name == "MountGear" then
+        if MountGearDB ~= nil and type(MountGearDB) ~= "table" then
+            status("Saved settings are invalid and were reset. Choose your mount gear again.", true)
+        end
         if type(MountGearDB) ~= "table" then MountGearDB = {} end
         db = MountGearDB
+        if db.picks ~= nil and type(db.picks) ~= "table" then
+            status("Saved mount picks are invalid and were cleared. Choose your mount gear again.", true)
+        end
         if type(db.picks) ~= "table" then db.picks = {} end
+        for slot, value in pairs(db.picks) do
+            if not addon.labels[slot] or not validItem(value) then
+                db.picks[slot] = nil
+                status("An invalid saved mount pick was cleared. Check your mount gear choices.", true)
+            end
+        end
         addon.db = db
         addon.registerSlashCommand()
         if IsLoggedIn and IsLoggedIn() then initialize() end
