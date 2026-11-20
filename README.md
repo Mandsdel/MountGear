@@ -18,10 +18,30 @@ MountGear equips the selected items when you mount and restores the gear you
 were wearing when you dismount. Changes to your picks take effect on the next
 ride.
 
+During a flight-path ride, MountGear pauses gear swaps and checks for landing
+once per second. It keeps the original gear snapshot and starts with fresh swap
+attempts after landing, even if no further mount-change event arrives.
 If combat or a busy cursor prevents a swap, MountGear waits. If a swap still
 fails (for example, an item is missing, two trinkets cannot be worn together,
 or a bag slot is needed to restore an empty slot), the addon reports which
 slots are affected. Fix the issue and click **Retry** in the window.
+
+If a pending restore is stuck or its saved items are no longer available,
+dismount and click **Reset**, then confirm. This forgets the pending restore
+without moving any equipment or clearing your mount picks. Equip your normal
+gear manually before mounting again so it becomes the next restore snapshot.
+Reset is blocked while mounted or on a flight path. **Clear** only changes a
+slot's mount preset; it does not discard a pending restore.
+
+## Local checks
+
+The standalone regression checks mock equipment, timers, and flight-path state;
+they do not verify WoW Forever API behavior. With Node.js available, run from
+this folder:
+
+```powershell
+npx --yes --package=fengari-node-cli fengari tests\test.lua
+```
 
 ## Install
 

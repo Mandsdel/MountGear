@@ -127,10 +127,18 @@ local function selection()
 end
 
 advance = function()
+    waitingFor = nil
+    -- Taxi travel can report a mount change while equipment swaps are blocked.
+    if UnitOnTaxi("player") then
+        waitingFor = "taxi"
+        attempts = {}
+        status("Waiting for the flight to end.")
+        schedule(1)
+        return
+    end
     local mounted = IsMounted()
     local ride = db.ride
     local targets = ride and (mounted and ride.mounted or ride.original) or (mounted and selection())
-    waitingFor = nil
     if not targets then
         status("Ready for the next mount.")
         return
@@ -200,11 +208,22 @@ function addon.retry()
     schedule()
 end
 
+function addon.resetRide()
+    if not addon.available then return end
+    if UnitOnTaxi("player") or IsMounted() then
+        status("Dismount or wait for the flight to end before resetting.", true)
+        return
+    end
+    db.ride = nil
+    attempts = {}
+    status("Pending restore forgotten. No gear was moved; your mount picks are unchanged.", true)
+end
+
 local function initialize()
     if addon.initialized then return end
     addon.initialized = true
     addon.available = not not (itemInfo and bagSize and bagLink and bagFree and pickupBag
-        and PickupInventoryItem and IsMounted and C_Timer and C_Timer.After)
+        and PickupInventoryItem and IsMounted and UnitOnTaxi and C_Timer and C_Timer.After)
     addon.createOptions()
     if addon.available then
         for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED" }) do
@@ -217,7 +236,7 @@ local function initialize()
         end
         addon.retry()
     else
-        status("Required gear or mount API unavailable in this client.", true)
+        status("Required gear, mount, or flight-path API unavailable in this client.", true)
     end
 end
 
