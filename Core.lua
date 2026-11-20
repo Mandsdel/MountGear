@@ -109,10 +109,10 @@ local function swap(slot, wanted, targets)
 end
 
 local advance
-local function schedule()
+local function schedule(delay)
     if timerSet then return end
     timerSet = true
-    C_Timer.After(0.2, function()
+    C_Timer.After(delay or 0.2, function()
         timerSet = false
         advance()
     end)
@@ -157,6 +157,7 @@ advance = function()
     if GetCursorInfo() then
         waitingFor = "cursor"
         status("Waiting for the cursor to clear.")
+        schedule(0.5)
         return
     end
 
@@ -206,7 +207,7 @@ local function initialize()
         and PickupInventoryItem and IsMounted and C_Timer and C_Timer.After)
     addon.createOptions()
     if addon.available then
-        for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED", "CURSOR_UPDATE" }) do
+        for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED" }) do
             local ok, err = pcall(frame.RegisterEvent, frame, name)
             if not ok then
                 addon.available = false
@@ -234,8 +235,7 @@ frame:SetScript("OnEvent", function(_, event, name)
         if db then initialize() end
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
         addon.retry()
-    elseif (event == "PLAYER_REGEN_ENABLED" and waitingFor == "combat")
-        or (event == "CURSOR_UPDATE" and waitingFor == "cursor" and not GetCursorInfo()) then
+    elseif event == "PLAYER_REGEN_ENABLED" and waitingFor == "combat" then
         schedule()
     end
 end)
