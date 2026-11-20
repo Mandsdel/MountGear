@@ -27,16 +27,38 @@ local function itemTooltip(button)
 end
 
 local function background(frame)
-    local texture = frame:CreateTexture(nil, "BACKGROUND")
-    texture:SetAllPoints()
-    texture:SetColorTexture(0.055, 0.06, 0.075, 0.97)
+    if frame.SetBackdrop then
+        frame:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 32, edgeSize = 32,
+            insets = { left = 11, right = 12, top = 12, bottom = 11 },
+        })
+    else
+        local texture = frame:CreateTexture(nil, "BACKGROUND")
+        texture:SetPoint("TOPLEFT", 4, -4)
+        texture:SetPoint("BOTTOMRIGHT", -4, 4)
+        texture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    end
+    local header = frame:CreateTexture(nil, "ARTWORK")
+    header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    header:SetSize(220, 48)
+    header:SetPoint("TOP", 0, 12)
+end
+
+local function titleText(frame, text)
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -3)
+    title:SetText(text)
+    return title
 end
 
 local function iconButton(parent)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(36, 36)
     local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints()
+    icon:SetPoint("TOPLEFT", 2, -2)
+    icon:SetPoint("BOTTOMRIGHT", -2, 2)
     button.icon = icon
     button:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
     button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
@@ -65,10 +87,10 @@ local function drawPicks()
 end
 
 local function drawPicker()
-    local columns = math.min(maxColumns, math.max(4, #choices))
+    local columns = math.min(maxColumns, math.max(5, #choices))
     local rows = math.max(1, math.ceil(#choices / columns))
     local visibleRows = math.min(maxRows, rows)
-    picker:SetSize(columns * cellSize + 24, visibleRows * cellSize + 78)
+    picker:SetSize(columns * cellSize + 40, visibleRows * cellSize + 88)
     scroll:SetSize(columns * cellSize, visibleRows * cellSize)
     content:SetSize(columns * cellSize, rows * cellSize)
     scroll:SetVerticalScroll(0)
@@ -121,8 +143,8 @@ local function choose(slot)
 end
 
 local function createWindow()
-    window = CreateFrame("Frame", "MountGearOptions", UIParent)
-    window:SetSize(256, 258)
+    window = CreateFrame("Frame", "MountGearOptions", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    window:SetSize(280, 300)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:EnableMouse(true)
@@ -132,23 +154,25 @@ local function createWindow()
 
     background(window)
 
-    local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 12, -12)
-    title:SetText("MountGear")
+    titleText(window, "MountGear")
+
+    local subtitle = window:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    subtitle:SetPoint("TOP", 0, -35)
+    subtitle:SetText("Riding Equipment")
 
     local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT")
     close:SetScript("OnClick", function() window:Hide() end)
 
     for i, slot in ipairs(addon.slots) do
-        local y = -40 - (i - 1) * 44
+        local y = -58 - (i - 1) * 46
         local label = window:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        label:SetPoint("TOPLEFT", 12, y - 12)
+        label:SetPoint("TOPLEFT", 24, y - 12)
         label:SetText(addon.labels[slot])
 
         local button = iconButton(window)
         button.slot = slot
-        button:SetPoint("TOPLEFT", 90, y)
+        button:SetPoint("TOPLEFT", 110, y)
         button:SetEnabled(addon.available)
         button:SetScript("OnClick", function() choose(slot) end)
         itemButtons[slot] = button
@@ -163,18 +187,18 @@ local function createWindow()
     end
 
     local hint = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOPLEFT", 12, -176)
+    hint:SetPoint("TOP", 0, -202)
     hint:SetText("Click a slot icon to choose gear.")
     local retry = makeButton(window, 56, 20, "Retry")
-    retry:SetPoint("TOPLEFT", 12, -198)
+    retry:SetPoint("TOPLEFT", 24, -224)
     retry:SetEnabled(addon.available)
     retry:SetScript("OnClick", addon.retry)
     statusText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", 12, -224)
+    statusText:SetPoint("TOPLEFT", 24, -254)
     statusText:SetWidth(232)
     statusText:SetJustifyH("LEFT")
 
-    picker = CreateFrame("Frame", "MountGearItemPicker", window)
+    picker = CreateFrame("Frame", "MountGearItemPicker", window, BackdropTemplateMixin and "BackdropTemplate" or nil)
     picker:SetPoint("TOPLEFT", window, "TOPRIGHT", 8, 0)
     picker:SetFrameStrata("DIALOG")
     picker:SetFrameLevel(window:GetFrameLevel() + 10)
@@ -191,12 +215,11 @@ local function createWindow()
         GameTooltip:Hide()
     end)
     window:SetScript("OnHide", function() picker:Hide(); GameTooltip:Hide() end)
-    pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pickerTitle:SetPoint("TOPLEFT", 12, -12)
+    pickerTitle = titleText(picker, "")
     pickerHint = picker:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    pickerHint:SetPoint("BOTTOMLEFT", 12, 12)
+    pickerHint:SetPoint("BOTTOMLEFT", 20, 20)
     scroll = CreateFrame("ScrollFrame", nil, picker)
-    scroll:SetPoint("TOPLEFT", 12, -38)
+    scroll:SetPoint("TOPLEFT", 20, -38)
     content = CreateFrame("Frame", nil, scroll)
     scroll:SetScrollChild(content)
     scroll:EnableMouseWheel(true)

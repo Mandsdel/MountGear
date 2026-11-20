@@ -4,6 +4,9 @@ A standalone World of Warcraft Forever addon (interface `16001`). Click the
 horse icon on the minimap or type `/mountgear`. Drag the icon around the
 minimap to move it.
 
+Both windows use classic WoW dialog textures, framed title banners, gold
+headings, and action-bar-style item slots without bundled UI libraries.
+
 Pick boots, up to two trinkets, or both. The picker shows items in your bags
 or already equipped. Click a slot icon in the main window to open a separate,
 automatically sized bag-style grid. Hover over an item icon to see its in-game
