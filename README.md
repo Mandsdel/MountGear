@@ -15,6 +15,16 @@ fails (for example, an item is missing, two trinkets cannot be worn together,
 or a bag slot is needed to restore an empty slot), the addon reports which
 slots are affected. Fix the issue and click **Retry** in the window.
 
-Install the `MountGear` folder into the WoW Forever `Interface\AddOns` folder,
-or use the shared DevAddOns installer. In-client behavior has not yet been
-verified.
+## Install
+
+Run `Install-MountGear.ps1` from this folder on the computer with WoW Forever
+installed. By default it installs to
+`D:\World of Warcraft\_forever_\Interface\AddOns\MountGear`. To use another
+AddOns folder:
+
+```powershell
+.\Install-MountGear.ps1 -AddOnsPath 'X:\World of Warcraft\_forever_\Interface\AddOns'
+```
+
+Enable the addon at character select or use `/reload` if it is already enabled.
+In-client behavior has not yet been verified.
