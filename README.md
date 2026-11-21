@@ -25,6 +25,10 @@ If combat or a busy cursor prevents a swap, MountGear waits. If a swap still
 fails (for example, an item is missing, two trinkets cannot be worn together,
 or a bag slot is needed to restore an empty slot), the addon reports which
 slots are affected. Fix the issue and click **Retry** in the window.
+Repeated warnings of the same swap-failure type are limited to one chat
+message every five minutes; the current failure remains visible in the window.
+Equip and restore failures, including locked-item failures, are tracked
+separately. Other warnings are not rate-limited.
 
 Temporary equipment and bag-item locks are checked every half-second, for up
 to 20 checks per operation, without using the failed-swap retry budget.

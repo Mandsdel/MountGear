@@ -1,4 +1,4 @@
-local addon, frame, timers, worn, bags, mounted, taxi, combat, cursor, blocked, swaps, warnings
+local addon, frame, timers, worn, bags, mounted, taxi, combat, cursor, blocked, swaps, warnings, clock
 local originals = { [8] = "item:1", [13] = "item:2", [14] = "item:3" }
 local picks = { [8] = "item:4", [13] = "item:5", [14] = "item:6" }
 local output = print
@@ -22,6 +22,7 @@ end
 local function setup()
     worn, bags = copy(originals), { picks[8], picks[13], picks[14] }
     mounted, taxi, combat, cursor, blocked, swaps = false, false, false, nil, false, 0
+    clock = 0
     IsInventoryItemLocked = nil
     C_Container, C_Item = nil, nil
     NUM_BAG_SLOTS = 0
@@ -53,6 +54,7 @@ local function setup()
     IsMounted = function() return mounted end
     UnitOnTaxi = function(unit) assert(unit == "player"); return taxi end
     InCombatLockdown = function() return combat end
+    GetTime = function() return clock end
     UnitAffectingCombat = function() return false end
     C_Timer = { After = function(delay, callback)
         timers[#timers + 1] = { delay = delay, callback = callback }
@@ -194,6 +196,42 @@ addon.db.picks[8] = picks[8]
 mount()
 mounted = false
 frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assertRestored()
+
+-- Repeated failures are rate-limited without hiding the status or losing the snapshot.
+setup()
+mount()
+mounted, blocked = false, true
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(#warnings == 1 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
+clock = 30
+addon.retry()
+drain()
+assert(#warnings == 1 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
+clock = 300
+addon.retry()
+drain()
+assert(#warnings == 2 and addon.db.ride)
+blocked = false
+addon.retry()
+drain()
+assertRestored()
+
+-- A different failure category still gets a warning within the cooldown.
+setup()
+mount()
+mounted, blocked = false, true
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(#warnings == 1)
+IsInventoryItemLocked = function() return true end
+addon.retry()
+drain()
+assert(#warnings == 2 and addon.status:find("Items are still locked", 1, true))
+IsInventoryItemLocked, blocked = nil, false
+addon.retry()
 drain()
 assertRestored()
 

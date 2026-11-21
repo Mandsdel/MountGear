@@ -12,6 +12,8 @@ local bagInfo = container.GetContainerItemInfo or GetContainerItemInfo
 local bagFree = container.GetContainerNumFreeSlots or GetContainerNumFreeSlots
 local pickupBag = container.PickupContainerItem or PickupContainerItem
 local db, timerSet, waitingFor, attempts
+local lastSwapWarning = {}
+local swapWarningInterval = 300
 local function key(link)
     if link then return link:match("item:[^|]+") or link end
     return false
@@ -86,6 +88,14 @@ local function status(text, warn)
     addon.status = text
     if addon.updateStatus then addon.updateStatus() end
     if warn then print("|cff80cfffMountGear:|r " .. text) end
+end
+
+local function swapFailure(text, category)
+    local now = GetTime()
+    local last = lastSwapWarning[category]
+    local warn = not last or now < last or now - last >= swapWarningInterval
+    if warn then lastSwapWarning[category] = now end
+    status(text, warn)
 end
 
 local function bagLocked(bag, index)
@@ -244,9 +254,10 @@ advance = function()
     end
     local names = {}
     for _, slot in ipairs(missing) do names[#names + 1] = addon.labels[slot] end
-    status((mounted and "Couldn't equip " or "Couldn't restore ") .. table.concat(names, ", ")
+    local failure = (mounted and "Couldn't equip " or "Couldn't restore ") .. table.concat(names, ", ")
         .. (locked and ". Items are still locked; wait for them to unlock and use Retry."
-            or ". Check your bags and use Retry."), true)
+            or ". Check your bags and use Retry.")
+    swapFailure(failure, (mounted and "equip" or "restore") .. (locked and "-locked" or "-failed"))
 end
 
 function addon.retry()
@@ -270,7 +281,7 @@ local function initialize()
     if addon.initialized then return end
     addon.initialized = true
     addon.available = not not (itemInfo and bagSize and bagLink and bagFree and pickupBag
-        and PickupInventoryItem and IsMounted and UnitOnTaxi and C_Timer and C_Timer.After)
+        and PickupInventoryItem and IsMounted and UnitOnTaxi and GetTime and C_Timer and C_Timer.After)
     addon.createOptions()
     if addon.available then
         for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED" }) do
