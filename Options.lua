@@ -5,6 +5,7 @@ local choosing, choices = nil, {}
 local cellSize, maxColumns, maxRows = 42, 8, 6
 local emptyIcons = {
     [8] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Feet",
+    [10] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Hands",
     [13] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket",
     [14] = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket",
 }
@@ -147,7 +148,7 @@ end
 
 local function createWindow()
     window = CreateFrame("Frame", "MountGearOptions", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    window:SetSize(280, 300)
+    window:SetSize(280, 340)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:EnableMouse(true)
@@ -190,10 +191,10 @@ local function createWindow()
     end
 
     local hint = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOP", 0, -202)
+    hint:SetPoint("TOP", 0, -240)
     hint:SetText("Click a slot icon to choose gear.")
     local retry = makeButton(window, 56, 20, "Retry")
-    retry:SetPoint("TOPLEFT", 24, -224)
+    retry:SetPoint("TOPLEFT", 24, -262)
     retry:SetEnabled(addon.available)
     retry:SetScript("OnClick", addon.retry)
     local reset = makeButton(window, 56, 20, "Reset")
@@ -226,7 +227,7 @@ local function createWindow()
     cancelReset:SetScript("OnClick", function() confirmation:Hide() end)
     reset:SetScript("OnClick", function() confirmation:Show() end)
     statusText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", 24, -254)
+    statusText:SetPoint("TOPLEFT", 24, -292)
     statusText:SetWidth(232)
     statusText:SetJustifyH("LEFT")
 

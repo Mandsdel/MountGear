@@ -1,6 +1,11 @@
 local addon, frame, timers, worn, bags, mounted, taxi, combat, cursor, blocked, swaps, warnings, instance
-local originals = { [8] = "item:1", [13] = "item:2", [14] = "item:3" }
-local picks = { [8] = "item:4", [13] = "item:5", [14] = "item:6" }
+local originals = { [8] = "item:1", [10] = "item:7", [13] = "item:2", [14] = "item:3" }
+local picks = { [8] = "item:4", [10] = "item:8", [13] = "item:5", [14] = "item:6" }
+local equipLocations = {
+    [1] = "INVTYPE_FEET", [2] = "INVTYPE_TRINKET", [3] = "INVTYPE_TRINKET",
+    [4] = "INVTYPE_FEET", [5] = "INVTYPE_TRINKET", [6] = "INVTYPE_TRINKET",
+    [7] = "INVTYPE_HAND", [8] = "INVTYPE_HAND",
+}
 local output = print
 
 local function copy(items)
@@ -20,7 +25,7 @@ local function loadAddon(saved)
 end
 
 local function setup()
-    worn, bags = copy(originals), { picks[8], picks[13], picks[14] }
+    worn, bags = copy(originals), { picks[8], picks[10], picks[13], picks[14] }
     mounted, taxi, combat, cursor, blocked, swaps = false, false, false, nil, false, 0
     instance = "none"
     IsInventoryItemLocked = nil
@@ -33,7 +38,10 @@ local function setup()
         }
         return frame
     end
-    GetItemInfoInstant = function() end
+    GetItemInfoInstant = function(link)
+        local id = tonumber(link:match("item:(%d+)"))
+        return id, nil, nil, equipLocations[id], "icon:" .. id
+    end
     GetContainerNumSlots = function() return 6 end
     GetContainerItemLink = function(_, slot) return bags[slot] end
     GetContainerItemInfo = function() return { isLocked = false } end
@@ -92,6 +100,10 @@ end
 
 setup()
 mount()
+local gloveChoices = addon.itemsFor(10)
+assert(#gloveChoices == 2)
+assert(addon.itemKey(gloveChoices[1].link) == "item:7")
+assert(addon.itemKey(gloveChoices[2].link) == "item:8")
 mounted = false
 frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
@@ -243,7 +255,7 @@ addon.resetRide()
 assert(not addon.db.ride and swaps == before)
 assert(addon.db.picks[8] == nil and addon.db.picks[13] == picks[13])
 blocked = false
-worn, bags = copy(originals), { picks[8], picks[13], picks[14] }
+worn, bags = copy(originals), { picks[8], picks[10], picks[13], picks[14] }
 addon.db.picks[8] = picks[8]
 mount()
 mounted = false
@@ -337,7 +349,7 @@ for _, location in ipairs({ "equipped", "bag-table", "bag-legacy", "other-trinke
         IsInventoryItemLocked = function() return locked end
     elseif location == "other-trinket" then
         worn[13], worn[14] = originals[14], originals[13]
-        bags[2], bags[3] = picks[13], picks[14]
+        bags[3], bags[4] = picks[13], picks[14]
         IsInventoryItemLocked = function(slot) return locked and slot == 14 end
     else
         GetContainerItemInfo = function()
@@ -400,6 +412,7 @@ for _, ride in ipairs({
     { mounted = {}, original = false },
     { mounted = { [8] = 123 }, original = { [8] = originals[8] } },
     { mounted = { [8] = picks[8] }, original = {} },
+    { mounted = { [10] = picks[10] }, original = {} },
     { mounted = { [13] = picks[13] }, original = { [13] = originals[13] } },
     { mounted = {}, original = { [8] = true } },
     { mounted = {}, original = { [8] = "" } },
@@ -447,10 +460,13 @@ for _, invalid in ipairs({ true, 123, "bad" }) do
 end
 
 setup()
-local link = "|cff00ff00|Hitem:4:0:0:0|h[Boots]|h|r"
-loadAddon({ picks = { [8] = link } })
+local links = {
+    [8] = "|cff00ff00|Hitem:4:0:0:0|h[Boots]|h|r",
+    [10] = "|cff00ff00|Hitem:8:0:0:0|h[Gloves]|h|r",
+}
+loadAddon({ picks = links })
 drain()
-assert(addon.db.picks[8] == link and #warnings == 0)
+assert(addon.db.picks[8] == links[8] and addon.db.picks[10] == links[10] and #warnings == 0)
 
 print = output
 print("MountGear flight-path, lock-wait, and saved-state recovery checks passed")

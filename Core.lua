@@ -1,8 +1,14 @@
 local _, addon = ...
 local frame = CreateFrame("Frame")
-local slots = { 8, 13, 14 }
+local slots = { 8, 10, 13, 14 }
 addon.slots = slots
-addon.labels = { [8] = "Boots", [13] = "Trinket 1", [14] = "Trinket 2" }
+addon.labels = { [8] = "Boots", [10] = "Gloves", [13] = "Trinket 1", [14] = "Trinket 2" }
+local equipLocations = {
+    [8] = "INVTYPE_FEET",
+    [10] = "INVTYPE_HAND",
+    [13] = "INVTYPE_TRINKET",
+    [14] = "INVTYPE_TRINKET",
+}
 
 local container = C_Container or _G
 local itemInfo = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
@@ -38,7 +44,8 @@ local function validRide(ride)
     if ride == nil then return true end
     if type(ride) ~= "table" or not validTargets(ride.mounted, false)
         or not validTargets(ride.original, true) then return false end
-    if ride.mounted[8] and ride.original[8] == nil then return false end
+    if (ride.mounted[8] and ride.original[8] == nil)
+        or (ride.mounted[10] and ride.original[10] == nil) then return false end
     if (ride.mounted[13] or ride.mounted[14])
         and (ride.original[13] == nil or ride.original[14] == nil) then return false end
     return true
@@ -62,7 +69,7 @@ function addon.itemsFor(slot)
     local function add(link)
         if not link then return end
         local _, _, _, equipLoc, icon = itemInfo(link)
-        if equipLoc ~= (slot == 8 and "INVTYPE_FEET" or "INVTYPE_TRINKET") then return end
+        if equipLoc ~= equipLocations[slot] then return end
         local id = key(link)
         if seen[id] then
             seen[id].count = seen[id].count + 1
@@ -125,7 +132,7 @@ local function swap(slot, wanted, targets)
         return true
     end) then return true end
 
-    if slot ~= 8 then
+    if slot == 13 or slot == 14 then
         local other = slot == 13 and 14 or 13
         if targets[other] ~= wanted and key(wornLink(other)) == wanted then
             if wornLocked(other) then return false, true end
@@ -214,7 +221,9 @@ advance = function()
 
     if not ride then
         local original = {}
-        if targets[8] then original[8] = key(wornLink(8)) end
+        for _, slot in ipairs({ 8, 10 }) do
+            if targets[slot] then original[slot] = key(wornLink(slot)) end
+        end
         -- Either trinket can supply the other slot, so save both.
         if targets[13] or targets[14] then
             original[13], original[14] = key(wornLink(13)), key(wornLink(14))
