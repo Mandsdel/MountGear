@@ -1,5 +1,9 @@
 # MountGear
 
+The existing gear selections, battleground toggle, retry and reset controls are
+also available under **Options > AddOns > MountGear**, alongside the minimap
+button and `/mountgear`.
+
 A standalone World of Warcraft Forever addon (interface `16001`). Click the
 horse icon on the minimap or type `/mountgear`. Drag the icon around the
 minimap to move it.

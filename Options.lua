@@ -1,5 +1,5 @@
 local _, addon = ...
-local window, statusText, picker, pickerTitle, pickerHint, scroll, content, emptyText, battlegroundToggle
+local window, statusText, picker, pickerTitle, pickerHint, scroll, content, emptyText, battlegroundToggle, optionsPanel
 local itemButtons, choicesButtons = {}, {}
 local choosing, choices = nil, {}
 local cellSize, maxColumns, maxRows = 42, 8, 6
@@ -297,7 +297,46 @@ local function toggleWindow()
     else
         drawPicks()
         addon.updateStatus()
+        battlegroundToggle:SetChecked(addon.db.battlegroundEnabled)
         window:Show()
+    end
+end
+
+local function registerSettings()
+    optionsPanel = CreateFrame("Frame", "MountGearSettingsPanel", UIParent)
+    optionsPanel.name = "MountGear"
+    optionsPanel:Hide()
+    local reopen = makeButton(optionsPanel, 180, 24, "Show MountGear settings")
+    reopen:SetPoint("TOPLEFT", 16, -16)
+    reopen:SetScript("OnClick", function()
+        if not window:IsShown() then toggleWindow() end
+    end)
+    optionsPanel:SetScript("OnShow", function()
+        if not window then createWindow() end
+        window:SetParent(optionsPanel)
+        window:ClearAllPoints()
+        window:SetPoint("TOPLEFT", optionsPanel, "TOPLEFT", 16, -52)
+        drawPicks()
+        addon.updateStatus()
+        battlegroundToggle:SetChecked(addon.db.battlegroundEnabled)
+        window:Show()
+    end)
+    optionsPanel:SetScript("OnHide", function()
+        if window then
+            window:Hide()
+            window:SetParent(UIParent)
+            window:ClearAllPoints()
+            window:SetPoint("CENTER")
+        end
+    end)
+    if Settings and type(Settings.RegisterCanvasLayoutCategory) == "function"
+        and type(Settings.RegisterAddOnCategory) == "function" then
+        local category = Settings.RegisterCanvasLayoutCategory(optionsPanel, "MountGear")
+        Settings.RegisterAddOnCategory(category)
+    elseif type(InterfaceOptions_AddCategory) == "function" then
+        InterfaceOptions_AddCategory(optionsPanel)
+    else
+        print("|cff80cfffMountGear:|r AddOns options registration unavailable; use /mountgear.")
     end
 end
 
@@ -307,6 +346,7 @@ function addon.registerSlashCommand()
 end
 
 function addon.createOptions()
+    registerSettings()
     local minimap = Minimap or (MinimapCluster and MinimapCluster.Minimap)
     if not minimap then
         print("|cff80cfffMountGear:|r Minimap unavailable; use /mountgear.")

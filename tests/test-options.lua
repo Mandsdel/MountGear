@@ -8,6 +8,7 @@ function methods:SetScript(event, handler) self.scripts[event] = handler end
 function methods:SetChecked(value) self.checked = value end
 function methods:GetChecked() return self.checked end
 function methods:GetName() return self.name end
+function methods:SetParent(parent) self.parent = parent end
 function methods:GetFrameLevel() return 1 end
 function methods:Show() self.shown = true end
 function methods:Hide() self.shown = false end
@@ -60,4 +61,23 @@ assert(addonEnabled == true)
 toggle:SetChecked(false)
 toggle.scripts.OnClick(toggle)
 assert(addonEnabled == false)
+
+local category
+Settings = {
+    RegisterCanvasLayoutCategory = function(panel, name)
+        assert(name == "MountGear")
+        return panel
+    end,
+    RegisterAddOnCategory = function(panel) category = panel end,
+}
+addon.createOptions()
+assert(category and category.scripts.OnShow and category.scripts.OnHide)
+category.scripts.OnShow()
+local window
+for _, frame in ipairs(frames) do
+    if frame.name == "MountGearOptions" then window = frame end
+end
+assert(window and window.parent == category and window:IsShown())
+category.scripts.OnHide()
+assert(window.parent == UIParent and not window:IsShown())
 print("MountGear options checks passed.")
