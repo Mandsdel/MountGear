@@ -1,4 +1,4 @@
-local addon, frame, timers, worn, bags, mounted, taxi, combat, cursor, blocked, swaps, warnings, clock
+local addon, frame, timers, worn, bags, mounted, taxi, combat, cursor, blocked, swaps, warnings, instance
 local originals = { [8] = "item:1", [13] = "item:2", [14] = "item:3" }
 local picks = { [8] = "item:4", [13] = "item:5", [14] = "item:6" }
 local output = print
@@ -22,7 +22,7 @@ end
 local function setup()
     worn, bags = copy(originals), { picks[8], picks[13], picks[14] }
     mounted, taxi, combat, cursor, blocked, swaps = false, false, false, nil, false, 0
-    clock = 0
+    instance = "none"
     IsInventoryItemLocked = nil
     C_Container, C_Item = nil, nil
     NUM_BAG_SLOTS = 0
@@ -52,9 +52,9 @@ local function setup()
     GetCursorInfo = function() return cursor and "item" end
     ClearCursor = function() assert(cursor == nil, "Unexpected item left on cursor") end
     IsMounted = function() return mounted end
+    IsInInstance = function() return instance ~= "none", instance end
     UnitOnTaxi = function(unit) assert(unit == "player"); return taxi end
     InCombatLockdown = function() return combat end
-    GetTime = function() return clock end
     UnitAffectingCombat = function() return false end
     C_Timer = { After = function(delay, callback)
         timers[#timers + 1] = { delay = delay, callback = callback }
@@ -91,6 +91,58 @@ local function assertRestored()
 end
 
 setup()
+mount()
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assertRestored()
+
+-- A battleground pauses both newly queued swaps and pending restoration.
+setup()
+mount()
+local snapshot, beforeBattleground = addon.db.ride, swaps
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+instance = "pvp"
+frame.OnEvent(frame, "PLAYER_ENTERING_WORLD")
+drain()
+assert(swaps == beforeBattleground and addon.db.ride == snapshot and #warnings == 0)
+assert(addon.status:find("Paused in a battleground", 1, true))
+addon.retry()
+drain()
+addon.resetRide()
+assert(swaps == beforeBattleground and addon.db.ride == snapshot and #warnings == 0)
+loadAddon(addon.db)
+drain()
+assert(swaps == beforeBattleground and addon.db.ride == snapshot and #warnings == 0)
+instance = "none"
+frame.OnEvent(frame, "ZONE_CHANGED_NEW_AREA")
+drain()
+assertRestored()
+
+-- Mounting and reloading inside a battleground never starts or loses a ride.
+setup()
+instance, mounted = "pvp", true
+frame.OnEvent(frame, "PLAYER_ENTERING_WORLD")
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(swaps == 0 and addon.db.ride == nil)
+loadAddon(addon.db)
+drain()
+assert(swaps == 0 and addon.db.ride == nil)
+instance = "none"
+frame.OnEvent(frame, "PLAYER_ENTERING_WORLD")
+drain()
+for slot, link in pairs(picks) do assert(worn[slot] == link) end
+assert(addon.db.ride)
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assertRestored()
+
+-- Other instance types do not activate the battleground pause.
+setup()
+instance = "party"
 mount()
 mounted = false
 frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
@@ -199,39 +251,49 @@ frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
 assertRestored()
 
--- Repeated failures are rate-limited without hiding the status or losing the snapshot.
+-- Repeated restore failures stay in the window and preserve the snapshot without chat output.
 setup()
 mount()
 mounted, blocked = false, true
 frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
-assert(#warnings == 1 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
-clock = 30
+assert(#warnings == 0 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
 addon.retry()
 drain()
-assert(#warnings == 1 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
-clock = 300
-addon.retry()
-drain()
-assert(#warnings == 2 and addon.db.ride)
+assert(#warnings == 0 and addon.status:find("Couldn't restore", 1, true) and addon.db.ride)
 blocked = false
 addon.retry()
 drain()
 assertRestored()
 
--- A different failure category still gets a warning within the cooldown.
+-- Locked restore failures are also silent while remaining visible in the window.
 setup()
 mount()
 mounted, blocked = false, true
 frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
-assert(#warnings == 1)
+assert(#warnings == 0)
 IsInventoryItemLocked = function() return true end
 addon.retry()
 drain()
-assert(#warnings == 2 and addon.status:find("Items are still locked", 1, true))
+assert(#warnings == 0 and addon.status:find("Items are still locked", 1, true))
 IsInventoryItemLocked, blocked = nil, false
 addon.retry()
+drain()
+assertRestored()
+
+-- Equip failures are silent too.
+setup()
+mounted, blocked = true, true
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(#warnings == 0 and addon.status:find("Couldn't equip", 1, true) and addon.db.ride)
+blocked = false
+addon.retry()
+drain()
+for slot, link in pairs(picks) do assert(worn[slot] == link) end
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
 assertRestored()
 
@@ -258,7 +320,13 @@ setup()
 UnitOnTaxi = nil
 loadAddon({ picks = copy(picks) })
 assert(not addon.available and #timers == 0)
-assert(addon.status == "Required gear, mount, or flight-path API unavailable in this client.")
+assert(addon.status == "Required gear, mount, flight-path, or instance API unavailable in this client.")
+
+setup()
+IsInInstance = nil
+loadAddon({ picks = copy(picks) })
+assert(not addon.available and #timers == 0)
+assert(addon.status == "Required gear, mount, flight-path, or instance API unavailable in this client.")
 
 -- A temporary lock gets its own wait budget and resumes without another event.
 for _, location in ipairs({ "equipped", "bag-table", "bag-legacy", "other-trinket" }) do
@@ -300,7 +368,7 @@ for _ = 1, 20 do
     assert(#timers == 1 and timers[1].delay == 0.5)
     tick()
 end
-assert(#timers == 0 and #warnings == 1 and addon.db.ride)
+assert(#timers == 0 and #warnings == 0 and addon.db.ride)
 assert(addon.status:find("Items are still locked", 1, true))
 IsInventoryItemLocked = nil
 addon.retry()

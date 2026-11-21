@@ -12,8 +12,6 @@ local bagInfo = container.GetContainerItemInfo or GetContainerItemInfo
 local bagFree = container.GetContainerNumFreeSlots or GetContainerNumFreeSlots
 local pickupBag = container.PickupContainerItem or PickupContainerItem
 local db, timerSet, waitingFor, attempts
-local lastSwapWarning = {}
-local swapWarningInterval = 300
 local function key(link)
     if link then return link:match("item:[^|]+") or link end
     return false
@@ -90,14 +88,6 @@ local function status(text, warn)
     if warn then print("|cff80cfffMountGear:|r " .. text) end
 end
 
-local function swapFailure(text, category)
-    local now = GetTime()
-    local last = lastSwapWarning[category]
-    local warn = not last or now < last or now - last >= swapWarningInterval
-    if warn then lastSwapWarning[category] = now end
-    status(text, warn)
-end
-
 local function bagLocked(bag, index)
     if not bagInfo then return false end
     local info, _, locked = bagInfo(bag, index)
@@ -169,6 +159,13 @@ end
 
 advance = function()
     waitingFor = nil
+    local _, instanceType = IsInInstance()
+    if instanceType == "pvp" then
+        waitingFor = "battleground"
+        attempts = {}
+        status("Paused in a battleground. Gear swaps resume after leaving.")
+        return
+    end
     if not validRide(db.ride) then
         local text = "Saved restore data is invalid. No gear was moved. Dismount and use Reset to recover."
         status(text, addon.status ~= text)
@@ -257,7 +254,7 @@ advance = function()
     local failure = (mounted and "Couldn't equip " or "Couldn't restore ") .. table.concat(names, ", ")
         .. (locked and ". Items are still locked; wait for them to unlock and use Retry."
             or ". Check your bags and use Retry.")
-    swapFailure(failure, (mounted and "equip" or "restore") .. (locked and "-locked" or "-failed"))
+    status(failure)
 end
 
 function addon.retry()
@@ -268,6 +265,11 @@ end
 
 function addon.resetRide()
     if not addon.available then return end
+    local _, instanceType = IsInInstance()
+    if instanceType == "pvp" then
+        status("Paused in a battleground. Reset is available after leaving.")
+        return
+    end
     if UnitOnTaxi("player") or IsMounted() then
         status("Dismount or wait for the flight to end before resetting.", true)
         return
@@ -281,10 +283,11 @@ local function initialize()
     if addon.initialized then return end
     addon.initialized = true
     addon.available = not not (itemInfo and bagSize and bagLink and bagFree and pickupBag
-        and PickupInventoryItem and IsMounted and UnitOnTaxi and GetTime and C_Timer and C_Timer.After)
+        and PickupInventoryItem and IsMounted and UnitOnTaxi and IsInInstance and C_Timer and C_Timer.After)
     addon.createOptions()
     if addon.available then
-        for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED" }) do
+        for _, name in ipairs({ "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_REGEN_ENABLED",
+            "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA" }) do
             local ok, err = pcall(frame.RegisterEvent, frame, name)
             if not ok then
                 addon.available = false
@@ -294,7 +297,7 @@ local function initialize()
         end
         addon.retry()
     else
-        status("Required gear, mount, or flight-path API unavailable in this client.", true)
+        status("Required gear, mount, flight-path, or instance API unavailable in this client.", true)
     end
 end
 
@@ -323,6 +326,9 @@ frame:SetScript("OnEvent", function(_, event, name)
     elseif event == "PLAYER_LOGIN" then
         if db then initialize() end
     elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" then
+        addon.retry()
+    elseif (event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA")
+        and addon.available then
         addon.retry()
     elseif event == "PLAYER_REGEN_ENABLED" and waitingFor == "combat" then
         schedule()

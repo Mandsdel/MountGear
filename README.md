@@ -18,17 +18,22 @@ MountGear equips the selected items when you mount and restores the gear you
 were wearing when you dismount. Changes to your picks take effect on the next
 ride.
 
+In battlegrounds, MountGear pauses all automatic and Retry-triggered gear
+swaps. Any pending restore snapshot is preserved, and Reset is unavailable
+until you leave. After leaving, it resumes using your current mount state:
+mounted gear if mounted, or the saved original gear if dismounted. It does not
+swap to normal gear on entry, so change gear beforehand if needed. Other
+instance types are unaffected.
+
 During a flight-path ride, MountGear pauses gear swaps and checks for landing
 once per second. It keeps the original gear snapshot and starts with fresh swap
 attempts after landing, even if no further mount-change event arrives.
 If combat or a busy cursor prevents a swap, MountGear waits. If a swap still
 fails (for example, an item is missing, two trinkets cannot be worn together,
-or a bag slot is needed to restore an empty slot), the addon reports which
-slots are affected. Fix the issue and click **Retry** in the window.
-Repeated warnings of the same swap-failure type are limited to one chat
-message every five minutes; the current failure remains visible in the window.
-Equip and restore failures, including locked-item failures, are tracked
-separately. Other warnings are not rate-limited.
+or a bag slot is needed to restore an empty slot), the window reports which
+slots are affected without posting swap failures to chat. Fix the issue and
+click **Retry** in the window. Saved-data and initialization warnings are
+still reported in chat.
 
 Temporary equipment and bag-item locks are checked every half-second, for up
 to 20 checks per operation, without using the failed-swap retry budget.
