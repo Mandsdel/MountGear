@@ -18,12 +18,12 @@ MountGear equips the selected items when you mount and restores the gear you
 were wearing when you dismount. Changes to your picks take effect on the next
 ride.
 
-In battlegrounds, MountGear pauses all automatic and Retry-triggered gear
-swaps. Any pending restore snapshot is preserved, and Reset is unavailable
-until you leave. After leaving, it resumes using your current mount state:
-mounted gear if mounted, or the saved original gear if dismounted. It does not
-swap to normal gear on entry, so change gear beforehand if needed. Other
-instance types are unaffected.
+In battlegrounds, MountGear pauses automatic gear swaps by default. Check
+**On/Off in Battlegrounds** to allow automatic and Retry-triggered swaps there;
+this also allows Reset while in a battleground. Any pending restore snapshot
+is preserved while swaps are paused. When swaps are enabled, MountGear follows
+your current mount state, equipping the saved mount gear or restoring the
+original gear. Other instance types are unaffected.
 
 During a flight-path ride, MountGear pauses gear swaps and checks for landing
 once per second. It keeps the original gear snapshot and starts with fresh swap
@@ -60,6 +60,7 @@ this folder:
 
 ```powershell
 npx --yes --package=fengari-node-cli fengari tests\test.lua
+npx --yes --package=fengari-node-cli fengari tests\test-options.lua
 ```
 
 ## Install

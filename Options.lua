@@ -1,5 +1,5 @@
 local _, addon = ...
-local window, statusText, picker, pickerTitle, pickerHint, scroll, content, emptyText
+local window, statusText, picker, pickerTitle, pickerHint, scroll, content, emptyText, battlegroundToggle
 local itemButtons, choicesButtons = {}, {}
 local choosing, choices = nil, {}
 local cellSize, maxColumns, maxRows = 42, 8, 6
@@ -45,11 +45,12 @@ local function background(frame)
     header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
     header:SetSize(220, 48)
     header:SetPoint("TOP", 0, 12)
+    return header
 end
 
-local function titleText(frame, text)
+local function titleText(frame, header, text)
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOP", 0, -3)
+    title:SetPoint("CENTER", header, "TOP", 0, -15)
     title:SetText(text)
     return title
 end
@@ -148,7 +149,7 @@ end
 
 local function createWindow()
     window = CreateFrame("Frame", "MountGearOptions", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    window:SetSize(280, 340)
+    window:SetSize(280, 380)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:EnableMouse(true)
@@ -156,9 +157,8 @@ local function createWindow()
     window:Hide()
     tinsert(UISpecialFrames, window:GetName())
 
-    background(window)
-
-    titleText(window, "MountGear")
+    local header = background(window)
+    titleText(window, header, "MountGear")
 
     local subtitle = window:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     subtitle:SetPoint("TOP", 0, -35)
@@ -190,11 +190,23 @@ local function createWindow()
         end)
     end
 
+    battlegroundToggle = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
+    battlegroundToggle:SetSize(26, 26)
+    battlegroundToggle:SetPoint("TOPLEFT", 24, -236)
+    battlegroundToggle:SetChecked(addon.db.battlegroundEnabled)
+    battlegroundToggle:SetEnabled(addon.available)
+    battlegroundToggle:SetScript("OnClick", function(self)
+        addon.setBattlegroundEnabled(self:GetChecked())
+    end)
+    local battlegroundLabel = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    battlegroundLabel:SetPoint("LEFT", battlegroundToggle, "RIGHT", 2, 0)
+    battlegroundLabel:SetText("On/Off in Battlegrounds")
+
     local hint = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    hint:SetPoint("TOP", 0, -240)
+    hint:SetPoint("TOP", 0, -266)
     hint:SetText("Click a slot icon to choose gear.")
     local retry = makeButton(window, 56, 20, "Retry")
-    retry:SetPoint("TOPLEFT", 24, -262)
+    retry:SetPoint("TOPLEFT", 24, -286)
     retry:SetEnabled(addon.available)
     retry:SetScript("OnClick", addon.retry)
     local reset = makeButton(window, 56, 20, "Reset")
@@ -208,8 +220,8 @@ local function createWindow()
     confirmation:SetFrameStrata("FULLSCREEN_DIALOG")
     confirmation:EnableMouse(true)
     confirmation:Hide()
-    background(confirmation)
-    titleText(confirmation, "Reset MountGear?")
+    local confirmationHeader = background(confirmation)
+    titleText(confirmation, confirmationHeader, "Reset MountGear?")
     tinsert(UISpecialFrames, confirmation:GetName())
     local resetText = confirmation:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     resetText:SetPoint("TOPLEFT", 24, -40)
@@ -227,7 +239,7 @@ local function createWindow()
     cancelReset:SetScript("OnClick", function() confirmation:Hide() end)
     reset:SetScript("OnClick", function() confirmation:Show() end)
     statusText = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", 24, -292)
+    statusText:SetPoint("TOPLEFT", 24, -316)
     statusText:SetWidth(232)
     statusText:SetJustifyH("LEFT")
 
@@ -238,7 +250,7 @@ local function createWindow()
     picker:EnableMouse(true)
     picker:SetClampedToScreen(true)
     picker:Hide()
-    background(picker)
+    local pickerHeader = background(picker)
     tinsert(UISpecialFrames, picker:GetName())
     local pickerClose = CreateFrame("Button", nil, picker, "UIPanelCloseButton")
     pickerClose:SetPoint("TOPRIGHT")
@@ -252,7 +264,7 @@ local function createWindow()
         confirmation:Hide()
         GameTooltip:Hide()
     end)
-    pickerTitle = titleText(picker, "")
+    pickerTitle = titleText(picker, pickerHeader, "")
     pickerHint = picker:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     pickerHint:SetPoint("BOTTOMLEFT", 20, 20)
     scroll = CreateFrame("ScrollFrame", nil, picker)

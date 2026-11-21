@@ -167,7 +167,7 @@ end
 advance = function()
     waitingFor = nil
     local _, instanceType = IsInInstance()
-    if instanceType == "pvp" then
+    if instanceType == "pvp" and not db.battlegroundEnabled then
         waitingFor = "battleground"
         attempts = {}
         status("Paused in a battleground. Gear swaps resume after leaving.")
@@ -272,10 +272,16 @@ function addon.retry()
     schedule()
 end
 
+function addon.setBattlegroundEnabled(enabled)
+    db.battlegroundEnabled = enabled == true or enabled == 1
+    attempts = {}
+    if addon.available then schedule() end
+end
+
 function addon.resetRide()
     if not addon.available then return end
     local _, instanceType = IsInInstance()
-    if instanceType == "pvp" then
+    if instanceType == "pvp" and not db.battlegroundEnabled then
         status("Paused in a battleground. Reset is available after leaving.")
         return
     end
@@ -323,6 +329,12 @@ frame:SetScript("OnEvent", function(_, event, name)
             status("Saved mount picks are invalid and were cleared. Choose your mount gear again.", true)
         end
         if type(db.picks) ~= "table" then db.picks = {} end
+        if db.battlegroundEnabled == nil then
+            db.battlegroundEnabled = false
+        elseif type(db.battlegroundEnabled) ~= "boolean" then
+            db.battlegroundEnabled = false
+            status("Invalid battleground setting was disabled. Choose again in MountGear options.", true)
+        end
         for slot, value in pairs(db.picks) do
             if not addon.labels[slot] or not validItem(value) then
                 db.picks[slot] = nil

@@ -100,6 +100,7 @@ end
 
 setup()
 mount()
+assert(addon.db.battlegroundEnabled == false)
 local gloveChoices = addon.itemsFor(10)
 assert(#gloveChoices == 2)
 assert(addon.itemKey(gloveChoices[1].link) == "item:7")
@@ -129,6 +130,53 @@ drain()
 assert(swaps == beforeBattleground and addon.db.ride == snapshot and #warnings == 0)
 instance = "none"
 frame.OnEvent(frame, "ZONE_CHANGED_NEW_AREA")
+drain()
+assertRestored()
+
+-- Enabling battleground swaps resumes an existing restore and permits Reset.
+setup()
+mount()
+mounted = false
+instance = "pvp"
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(addon.db.ride and addon.status:find("Paused in a battleground", 1, true))
+addon.setBattlegroundEnabled(1)
+drain()
+assert(addon.db.battlegroundEnabled and worn[8] == originals[8] and worn[10] == originals[10])
+assert(worn[13] == originals[13] and worn[14] == originals[14] and addon.db.ride == nil)
+mounted = true
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(addon.db.ride)
+addon.setBattlegroundEnabled(false)
+drain()
+mounted = false
+local beforePausedRestore = swaps
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(addon.db.ride and swaps == beforePausedRestore)
+assert(addon.status:find("Paused in a battleground", 1, true))
+addon.setBattlegroundEnabled(true)
+drain()
+assertRestored()
+
+mounted = true
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
+drain()
+assert(addon.db.ride)
+mounted = false
+local beforeReset = swaps
+addon.resetRide()
+assert(addon.db.ride == nil and swaps == beforeReset)
+
+-- Enabling battleground swaps before mounting equips and restores as usual.
+setup()
+addon.setBattlegroundEnabled(true)
+instance = "pvp"
+mount()
+mounted = false
+frame.OnEvent(frame, "PLAYER_MOUNT_DISPLAY_CHANGED")
 drain()
 assertRestored()
 
@@ -458,6 +506,10 @@ for _, invalid in ipairs({ true, 123, "bad" }) do
     drain()
     assert(next(addon.db.picks) == nil and #warnings == 1)
 end
+
+setup()
+loadAddon({ picks = copy(picks), battlegroundEnabled = "yes" })
+assert(addon.db.battlegroundEnabled == false and #warnings == 1)
 
 setup()
 local links = {
